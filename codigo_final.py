@@ -1,50 +1,66 @@
-import time
-import requests
-from datetime import datetime, timedelta
-
-# Apagar si no hay actividad por 30 minutos
-ULTIMA_ACTIVIDAD = datetime.now()
-
-def verificar_inactividad():
-    global ULTIMA_ACTIVIDAD
-    if datetime.now() - ULTIMA_ACTIVIDAD > timedelta(minutes=30):
-        print("30 minutos sin actividad. Apagando para ahorrar horas...")
-        sys.exit(0)
-
-# En el bucle principal, después de procesar cada update:
-ULTIMA_ACTIVIDAD = datetime.now()
-# Y al inicio del while, añade:
-verificar_inactividad()
-# GALACTIC DOMINATION - BOT DE TELEGRAM
-# Versión final - Todo en uno
+# ============================================
+# GALACTIC DOMINATION - BOT PARA RAILWAY
+# Versión con ahorro automático de horas
 # ============================================
 
 import requests
 import json
 import time
-from datetime import datetime
+import sys
+import os
+from datetime import datetime, timedelta
+from threading import Thread
 
 # ============================================
-# CONFIGURACIÓN (CAMBIA SOLO ESTO)
+# CONFIGURACIÓN DE AHORRO DE HORAS
 # ============================================
-TOKEN = "8330954795:AAHANv63h9F1BBpQuOFasc1fNNwHwBD2KUw"  # ← PON AQUÍ TU TOKEN
-# ============================================
+INICIO = datetime.now()
+ULTIMA_ACTIVIDAD = datetime.now()
+HORAS_MAXIMAS_CONTINUAS = 16  # Se apaga después de 16h seguidas
+MINUTOS_INACTIVIDAD_MAX = 45   # Se apaga si nadie habla en 45 minutos
+MODO_PRUEBA = False            # Cambiar a True solo para pruebas rápidas
 
+def verificar_limites():
+    """Verifica si debemos apagar el bot para ahorrar horas"""
+    ahora = datetime.now()
+    
+    # 1. Verificar límite de horas continuas
+    horas_transcurridas = (ahora - INICIO).total_seconds() / 3600
+    if horas_transcurridas >= HORAS_MAXIMAS_CONTINUAS and not MODO_PRUEBA:
+        print(f"\n⏰ Límite de {HORAS_MAXIMAS_CONTINUAS}h alcanzado. Apagando para ahorrar horas...")
+        print("Railway reiniciará automáticamente cuando haya disponibilidad.")
+        sys.exit(0)
+    
+    # 2. Verificar inactividad
+    minutos_inactivo = (ahora - ULTIMA_ACTIVIDAD).total_seconds() / 60
+    if minutos_inactivo >= MINUTOS_INACTIVIDAD_MAX and not MODO_PRUEBA:
+        print(f"\n💤 {MINUTOS_INACTIVIDAD_MAX} minutos sin actividad. Apagando para ahorrar horas...")
+        sys.exit(0)
+
+def actualizar_actividad():
+    """Llama a esta función cada vez que hay interacción"""
+    global ULTIMA_ACTIVIDAD
+    ULTIMA_ACTIVIDAD = datetime.now()
+
+# ============================================
+# CONFIGURACIÓN DEL BOT
+# ============================================
+TOKEN = os.environ.get('TOKEN', "8330954795:AAHANv63h9F1BBpQuOFasc1fNNwHwBD2KUw")
 API = f"https://api.telegram.org/bot{TOKEN}"
 
 print("=" * 50)
-print("🚀 GALACTIC DOMINATION - BOT ACTIVADO")
+print("🚀 GALACTIC DOMINATION - BOT PARA RAILWAY")
 print("=" * 50)
-print("✅ Bot listo para recibir mensajes")
-print("✅ Presiona Ctrl+C para detener")
+print(f"✅ Bot iniciado: {INICIO.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"✅ Límite continuo: {HORAS_MAXIMAS_CONTINUAS}h")
+print(f"✅ Inactividad máxima: {MINUTOS_INACTIVIDAD_MAX}min")
+print("✅ Esperando mensajes...")
 print("=" * 50)
 
 # ============================================
 # FUNCIONES AUXILIARES
 # ============================================
-
 def enviar_menu(chat_id):
-    """Envía el menú principal"""
     keyboard = {
         "inline_keyboard": [
             [{"text": "👤 Mi Perfil", "callback_data": "perfil"}],
@@ -59,9 +75,9 @@ def enviar_menu(chat_id):
         "parse_mode": "Markdown",
         "reply_markup": json.dumps(keyboard)
     })
+    actualizar_actividad()
 
-def enviar_perfil(chat_id, user_id, username):
-    """Muestra el perfil del jugador"""
+def enviar_perfil(chat_id, username):
     texto = (
         f"👤 **PERFIL DE GUERRERO**\n\n"
         f"📛 Usuario: @{username}\n"
@@ -77,9 +93,9 @@ def enviar_perfil(chat_id, user_id, username):
         "text": texto,
         "parse_mode": "Markdown"
     })
+    actualizar_actividad()
 
 def mostrar_razas(chat_id, message_id):
-    """Muestra opciones de razas"""
     keyboard = {
         "inline_keyboard": [
             [{"text": "⚔️ Ofensiva (+20% ataque)", "callback_data": "raza_offensive"}],
@@ -91,13 +107,13 @@ def mostrar_razas(chat_id, message_id):
     requests.post(f"{API}/editMessageText", json={
         "chat_id": chat_id,
         "message_id": message_id,
-        "text": "🌟 **ELIGE TU RAZA**\nCada una tiene bonificaciones únicas:",
+        "text": "🌟 **ELIGE TU RAZA**",
         "parse_mode": "Markdown",
         "reply_markup": json.dumps(keyboard)
     })
+    actualizar_actividad()
 
 def mostrar_base(chat_id, message_id):
-    """Muestra información de la base"""
     texto = (
         "🏰 **BASE ESPACIAL**\n\n"
         "📊 Nivel: 1\n"
@@ -122,9 +138,9 @@ def mostrar_base(chat_id, message_id):
         "parse_mode": "Markdown",
         "reply_markup": json.dumps(keyboard)
     })
+    actualizar_actividad()
 
 def mostrar_construccion(chat_id, message_id):
-    """Muestra opciones de construcción"""
     keyboard = {
         "inline_keyboard": [
             [{"text": "🛩️ Cazas (50⚡)", "callback_data": "build_fighter"}],
@@ -142,72 +158,70 @@ def mostrar_construccion(chat_id, message_id):
         "parse_mode": "Markdown",
         "reply_markup": json.dumps(keyboard)
     })
+    actualizar_actividad()
 
 # ============================================
-# BUCLE PRINCIPAL
+# BUCLE PRINCIPAL CON VERIFICACIÓN DE LÍMITES
 # ============================================
-
 ultimo_id = 0
 
 while True:
     try:
+        # Verificar si debemos apagar el bot
+        verificar_limites()
+        
+        # Obtener mensajes nuevos
         respuesta = requests.get(f"{API}/getUpdates", params={
             "offset": ultimo_id + 1,
             "timeout": 30
         }, timeout=35)
-
+        
         updates = respuesta.json().get("result", [])
-
+        
         for update in updates:
             # ===== MENSAJES DE TEXTO =====
             if "message" in update and "text" in update["message"]:
                 chat_id = update["message"]["chat"]["id"]
                 texto = update["message"]["text"]
-                user_id = update["message"]["from"]["id"]
                 username = update["message"]["from"].get("username", "Jugador")
-
+                
                 print(f"\n📩 @{username}: {texto}")
-
+                actualizar_actividad()
+                
                 if texto == "/start":
                     requests.post(f"{API}/sendMessage", json={
                         "chat_id": chat_id,
                         "text": f"🚀 ¡Bienvenido @{username} a GALACTIC DOMINATION!\n\nUsa /menu para comenzar."
                     })
-
                 elif texto == "/menu":
                     enviar_menu(chat_id)
 
-            # ===== BOTONES (CALLBACKS) =====
+            # ===== BOTONES =====
             if "callback_query" in update:
                 cb = update["callback_query"]
                 chat_id = cb["message"]["chat"]["id"]
                 message_id = cb["message"]["message_id"]
                 data = cb["data"]
-                user_id = cb["from"]["id"]
                 username = cb["from"].get("username", "Jugador")
-
+                
                 # Responder al callback
                 requests.post(f"{API}/answerCallbackQuery", json={
                     "callback_query_id": cb["id"]
                 })
-
+                
                 print(f"🔘 @{username} presionó: {data}")
-
+                actualizar_actividad()
+                
                 if data == "perfil":
-                    enviar_perfil(chat_id, user_id, username)
-
+                    enviar_perfil(chat_id, username)
                 elif data == "razas":
                     mostrar_razas(chat_id, message_id)
-
                 elif data == "base":
                     mostrar_base(chat_id, message_id)
-
                 elif data == "construir":
                     mostrar_construccion(chat_id, message_id)
-
                 elif data == "volver_menu":
-                    enviar_menu(chat_id)  # reenvía el menú
-
+                    enviar_menu(chat_id)
                 elif data.startswith("raza_"):
                     raza = data.replace("raza_", "")
                     nombres = {
@@ -228,25 +242,11 @@ while True:
                         "parse_mode": "Markdown",
                         "reply_markup": json.dumps(keyboard)
                     })
-
-                elif data.startswith("build_"):
-                    requests.post(f"{API}/editMessageText", json={
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text": "✅ **Construcción iniciada** (próximamente disponible)",
-                        "parse_mode": "Markdown",
-                        "reply_markup": json.dumps({
-                            "inline_keyboard": [
-                                [{"text": "🔧 Seguir construyendo", "callback_data": "construir"}],
-                                [{"text": "🔙 Volver", "callback_data": "volver_menu"}]
-                            ]
-                        })
-                    })
-
+            
             ultimo_id = update["update_id"]
-
+            
     except KeyboardInterrupt:
-        print("\n👋 Bot detenido por el usuario")
+        print("\n👋 Bot detenido manualmente")
         break
     except Exception as e:
         print(f"❌ Error: {e}")
